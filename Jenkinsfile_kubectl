@@ -1,0 +1,99 @@
+pipeline {
+    agent all
+
+    parameters {
+        string(name: 'GIT_REPO', defaultValue: 'git@github.com:sarhipov/nodejs-app.git', description: 'Git repository URL')
+        string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Git branch')
+        string(name: 'GIT_CREDENTIALS_ID', defaultValue: 'github', description: 'Github credentials ID')
+        string(name: 'DOCKER_REGISTRY_CREDENTIALS_ID', defaultValue: 'dockerhub', description: 'Dockerhub credentials ID')
+        string(name: 'KUBECONFIG_CREDENTIALS_ID', defaultValue: 'dev-kubeconfig', description: 'Kubeconfig credentials ID')
+
+        # K8s deployment
+        string(name: 'K8S_APP_NAME', defaultValue: 'nodejs-app', description: 'Kubernetes application name')
+        string(name: 'ENVIRONMENT', defaultValue: 'development', description: 'Environment to deploy')
+        string(name: 'DOCKER_IMAGE_NAME', defaultValue: 'sarhipov/nodejs-app', description: 'Docker image name')
+        string(name: 'DOCKER_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image name')
+        string(name: 'K8S_APP_REPLICAS', defaultValue: '2', description: 'Number of replicas for the deployment image name')
+        string(name: 'K8S_CONTAINER_PORT', defaultValue: '3000', description: 'Application container port')
+        string(name: 'K8S_SERVICE_PORT', defaultValue: '80', description: 'Application service port')
+        string(name: 'K8S_APP_URL', defaultValue: 'sergei-app.topia.engineering', description: 'Application URL')
+    }
+
+    stages {
+         stage('Checkout') {
+            description: 'Checkout the Git repository'
+            steps {
+                script {
+                    try {
+                        // Checkout the Git repository with branch
+                        checkout([$class: 'GitSCM', branches: [[name: params.GIT_BRANCH]], userRemoteConfigs: [[credentialsId: params.GIT_CREDENTIALS_ID, url: params.GIT_REPO, clean: true]]])
+                    } catch (Exception e) {
+                        echo "Error in Checkout stage: ${e}"
+                        currentBuild.result = 'FAILURE'
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            description: 'Build docker image and push it to the Docker repository'
+            steps {
+                script {
+                    try {
+                        // Use Docker registry for building and pushing the Docker image
+                        docker.withRegistry('', params.DOCKER_REGISTRY_CREDENTIALS_ID) {
+                            // Define the Docker image name with tag
+                            def dockerImageNameWithTag = "${params.DOCKER_IMAGE_NAME}:${params.DOCKER_IMAGE_TAG}"
+
+                            // Build Docker image with the specified tag
+                            def dockerImage = docker.build(dockerImageNameWithTag, "-f Dockerfile .")
+
+                            // Push Docker image with the specified tag
+                            dockerImage.push()
+                        }
+                    } catch (Exception e) {
+                        echo "Error in Build Docker Image stage: ${e}"
+                        currentBuild.result = 'FAILURE'
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes with yaml ') {
+            description: 'Deploy application to the Kubernetes cluster'
+            steps {
+                script {
+                    try {
+                        // Replace placeholders in k8s-deployment.yaml
+                        def k8sDeployment = readFile('k8s/jenkins/values_jenkins.yaml')
+                        k8sDeployment = k8sDeployment.replaceAll('\\K8S_APP_NAME', params.K8S_APP_NAME)
+                        k8sDeployment = k8sDeployment.replaceAll('\\ENVIRONMENT', params.ENVIRONMENT)
+                        k8sDeployment = k8sDeployment.replaceAll('\\$DOCKER_IMAGE_NAME', params.DOCKER_IMAGE_NAME)
+                        k8sDeployment = k8sDeployment.replaceAll('\\$DOCKER_IMAGE_TAG', params.DOCKER_IMAGE_TAG)
+                        k8sDeployment = k8sDeployment.replaceAll('\\K8S_APP_REPLICAS', params.K8S_APP_REPLICAS)
+                        k8sDeployment = k8sDeployment.replaceAll('\\K8S_CONTAINER_PORT', params.K8S_CONTAINER_PORT)
+                        k8sDeployment = k8sDeployment.replaceAll('\\K8S_APP_PORT', params.K8S_APP_PORT)
+                        k8sDeployment = k8sDeployment.replaceAll('\\K8S_APP_URL', params.K8S_APP_URL)
+
+                        // Deploy the application to Kubernetes using the Kubernetes Continuous Deploy Plugin
+                        withCredentials([file(credentialsId: params.KUBECONFIG_CREDENTIALS_ID, variable: 'KUBECONFIG')]) {
+                            sh "KUBECONFIG=$KUBECONFIG echo '${k8sDeployment}' | kubectl apply -f -"
+                        }
+                    } catch (Exception e) {
+                        echo "Error in Deploy to Kubernetes stage: ${e}"
+                        currentBuild.result = 'FAILURE'
+                    }
+                }
+            }
+        }
+
+       post {
+            failure {
+                echo 'Build failed!'
+            }
+            success {
+                    echo 'Build succeeded!'
+            }
+        }
+    }
+}

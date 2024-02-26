@@ -1,0 +1,104 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: $K8S_APP_NAME
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${K8S_APP_NAME}-deployment
+  namespace: $K8S_APP_NAME
+spec:
+  replicas: $K8S_APP_REPLICAS
+  selector:
+    matchLabels:
+      app: $K8S_APP_NAME
+  template:
+    metadata:
+      labels:
+        app: $K8S_APP_NAME
+    spec:
+      # (optional) Implemented to prevent deployments without the specified toleration from being scheduled on this node.
+      # Note: Corresponding node tainting is required.
+      tolerations:
+        - key: "application"
+          operator: "Equal"
+          value: "nodejs-app"
+          effect: "NoSchedule"
+      # (optional) Implemented to ensure that this deployment is specifically scheduled on a designated node.
+      # Note: Corresponding node labeling is required.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: application
+                    operator: In
+                    values:
+                      - $K8S_APP_NAME
+      containers:
+        - name: ${K8S_APP_NAME}-container
+          image: $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG
+          # (optional)
+          # Note: Those are just random request/limit numbers. It's good practice to set requests/limits
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          # (optional)
+          # Note: Good practice to set probes. In this case, the node-js-app responds with a 200 OK status on hitting the /health endpoint.
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: $K8S_CONTAINER_PORT
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: $K8S_CONTAINER_PORT
+          ports:
+            - containerPort: $K8S_CONTAINER_PORT
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${K8S_APP_NAME}-service
+  namespace: $K8S_APP_NAME
+spec:
+  selector:
+    app: $K8S_APP_NAME
+  type: NodePort
+  ports:
+    - protocol: TCP
+      port: $K8S_SERVICE_PORT
+      targetPort: $K8S_CONTAINER_PORT
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ${K8S_APP_NAME}-ingress
+  namespace: $K8S_APP_NAME
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/group.name: public
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/tags: environment=$ENVIRONMENT
+  finalizers:
+    - group.ingress.k8s.aws/public
+spec:
+  rules:
+    - host: $K8S_APP_URL
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ${K8S_APP_NAME}-service
+                port:
+                  number: $K8S_SERVICE_PORT
