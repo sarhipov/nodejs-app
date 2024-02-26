@@ -21,7 +21,7 @@ pipeline {
 
     stages {
          stage('Checkout') {
-            description: 'Checkout the Git repository'
+            description: 'Checkout application code from the Git repository'
             steps {
                 script {
                     try {
@@ -59,8 +59,8 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes with yaml ') {
-            description: 'Deploy application to the Kubernetes cluster'
+        stage('Deploy to Kubernetes with yaml') {
+            description: 'Deploy application to the Kubernetes cluster using kubectl'
             steps {
                 script {
                     try {
