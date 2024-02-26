@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodejs-app-deployment
+  namespace: nodejs-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nodejs-app
+  template:
+    metadata:
+      labels:
+        app: nodejs-app
+    spec:
+      # (optional) Implemented to prevent deployments without the specified toleration from being scheduled on this node.
+      # Note: Corresponding node tainting is required.
+      tolerations:
+        - key: "application"
+          operator: "Equal"
+          value: "nodejs-app"
+          effect: "NoSchedule"
+      # (optional) Implemented to ensure that this deployment is specifically scheduled on a designated node.
+      # Note: Corresponding node labeling is required.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: application
+                    operator: In
+                    values:
+                      - nodejs-app
+      containers:
+        - name: nodejs-app-container
+          image: sarhipov/nodejs-app:latest
+          # (optional)
+          # Note: Those are just random request/limit numbers. It's good practice to set requests/limits
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          # (optional)
+          # Note: Good practice to set probes. In this case, the node-js-app responds with a 200 OK status on hitting the /health endpoint.
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+          ports:
+            - containerPort: 3000
