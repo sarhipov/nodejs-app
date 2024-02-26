@@ -1,0 +1,7 @@
+# Chart.yaml
+apiVersion: v2
+name: nodejs-app
+description: A Helm chart for nodejs-app
+type: application
+version: 1.0.0
+appVersion: 1.0.0

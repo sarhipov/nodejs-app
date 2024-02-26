@@ -1,0 +1,11 @@
+# values.yaml
+appName: nodejs-app
+environment: "development"
+replicaCount: 2
+image:
+  name: "sarhipov/nodejs-app"
+  tag: "latest"
+connectivity:
+  containerPort: 3000
+  servicePort: 80
+  serviceURL: "sergei-app.topia.engineering"

@@ -1,0 +1,27 @@
+# templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.appName }}-ingress
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/group.name: public
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/tags: environment={{ .Values.environment }}
+  finalizers:
+    - group.ingress.k8s.aws/public
+spec:
+  rules:
+    - host: {{ .Values.connectivity.serviceURL }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.appName }}-service
+                port:
+                  number: {{ .Values.connectivity.servicePort }}

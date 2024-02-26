@@ -1,0 +1,11 @@
+# values.yaml
+appName: $K8S_APP_NAME
+environment: $ENVIRONMENT
+replicaCount: $K8S_APP_REPLICAS
+image:
+  name: $DOCKER_IMAGE_NAME
+  tag: $DOCKER_IMAGE_TAG
+connectivity:
+  containerPort: $K8S_CONTAINER_PORT
+  servicePort: $K8S_SERVICE_PORT
+  serviceURL: $K8S_APP_URL
